@@ -12,8 +12,23 @@
 <body>
   <div class="fullscreen">
     <canvas id="gameCanvas"></canvas>
-    <div class="hud">
+    <div class="mobile-bar">
       <button id="menuToggle" class="menu-toggle" aria-label="Menu">☰</button>
+      <div class="mini-stat">
+        <span class="mini-label">Lvl</span>
+        <span id="mobileLevel" class="mini-value">-</span>
+      </div>
+      <div class="mini-stat">
+        <span class="mini-label">Loot</span>
+        <span id="mobileLoot" class="mini-value">-</span>
+      </div>
+      <div class="mini-stat">
+        <span class="mini-label">Crocs</span>
+        <span id="mobileCrocs" class="mini-value">-</span>
+      </div>
+      <button id="mobileShopButton" class="menu-toggle shop-toggle" aria-label="Shop">🛍</button>
+    </div>
+    <div class="hud">
       <div class="hud-top">
         <div class="title-block">
           <h1>Crocy Clash</h1>

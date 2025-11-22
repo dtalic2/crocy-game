@@ -12,6 +12,10 @@ const shopPanel = document.getElementById("shopPanel");
 const closeShop = document.getElementById("closeShop");
 const shopItemsEl = document.getElementById("shopItems");
 const menuToggle = document.getElementById("menuToggle");
+const mobileLevel = document.getElementById("mobileLevel");
+const mobileLoot = document.getElementById("mobileLoot");
+const mobileCrocs = document.getElementById("mobileCrocs");
+const mobileShopButton = document.getElementById("mobileShopButton");
 
 const levelDisplay = document.getElementById("levelDisplay");
 const pelletDisplay = document.getElementById("pelletDisplay");
@@ -930,6 +934,9 @@ function updateStats() {
   crocDisplay.textContent = npcs.length.toString();
   everDisplay.textContent = everPlayers.toString();
   activeDisplay.textContent = running ? "1" : "0";
+  if (mobileLevel) mobileLevel.textContent = levelDisplay.textContent;
+  if (mobileLoot) mobileLoot.textContent = pelletDisplay.textContent;
+  if (mobileCrocs) mobileCrocs.textContent = crocDisplay.textContent;
 }
 
 function isMobile() {
@@ -997,6 +1004,24 @@ menuToggle?.addEventListener("click", () => {
   menuOpen = !menuOpen;
   updateMobileUi();
 });
+mobileShopButton?.addEventListener("click", () => {
+  shopPanel.classList.remove("hidden");
+  renderShop();
+  if (isMobile()) {
+    menuOpen = true;
+    updateMobileUi();
+  }
+});
+
+// Extra mobile-friendly bindings for start/restart
+startButton.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  startGame();
+}, { passive: false });
+overlayButton.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  startGame();
+}, { passive: false });
 
 // Kick off idle render so the board is visible before starting.
 resizeCanvas();
