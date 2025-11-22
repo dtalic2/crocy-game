@@ -990,6 +990,9 @@ window.addEventListener("touchstart", (e) => {
   player.vx = Math.cos(angle) * speed;
   player.vy = Math.sin(angle) * speed;
 });
+canvas.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+}, { passive: false });
 
 startButton.addEventListener("click", startGame);
 overlayButton.addEventListener("click", startGame);
