@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crocy Clash</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="fullscreen">
+    <canvas id="gameCanvas"></canvas>
+    <div class="hud">
+      <div class="hud-top">
+        <div class="title-block">
+          <h1>Crocy Clash</h1>
+          <p class="byline">A game by Greta and Lou</p>
+          <p class="lede">
+            Giant lagoon, giant appetite. Run down smaller crocs and pellets to bulk up—watch for bigger hunters.
+          </p>
+          <div class="actions">
+            <input id="playerNameInput" class="name-input" type="text" placeholder="Your croc name" maxlength="14" />
+            <button id="startButton" class="primary">Start / Restart</button>
+            <span class="hint">WASD / Arrows to move</span>
+          </div>
+        </div>
+        <div class="stat-block">
+          <div class="stat">
+            <span class="label">Level</span>
+            <span id="levelDisplay" class="value">-</span>
+          </div>
+          <div class="stat">
+            <span class="label">Loot</span>
+            <span id="pelletDisplay" class="value">-</span>
+          </div>
+          <div class="stat">
+            <span class="label">Crocs</span>
+            <span id="crocDisplay" class="value">-</span>
+          </div>
+          <div class="stat badge-housing">
+            <div id="statusBadge" class="badge badge-live">Live</div>
+          </div>
+          <button id="shopButton" class="secondary">Shop</button>
+        </div>
+      </div>
+      <div class="hud-bottom">
+        <div class="card inline" id="howToPlay">
+          <h4>How to play</h4>
+          <ul class="guide">
+            <li>Move with WASD or arrow keys.</li>
+            <li>Eat lower-level crocs to absorb their level.</li>
+            <li>Pellets add +1 level; they respawn around the lagoon.</li>
+            <li>Bigger crocs end your run on contact.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div id="overlay" class="overlay hidden">
+      <div class="card">
+        <p class="eyebrow">You were swallowed</p>
+        <h3>Game Over</h3>
+        <p id="overlayMessage">A bigger croc got you.</p>
+        <button id="overlayButton" class="primary">Run it back</button>
+      </div>
+    </div>
+
+    <div id="shopPanel" class="shop hidden">
+      <div class="shop-card">
+        <div class="shop-header">
+          <div>
+            <p class="eyebrow">Style Hut</p>
+            <h3>Skins & Gear</h3>
+            <p class="muted">Buy skins with pellets collected this run.</p>
+          </div>
+          <button id="closeShop" class="ghost">Close</button>
+        </div>
+        <div class="shop-items" id="shopItems"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
