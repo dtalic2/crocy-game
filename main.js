@@ -11,11 +11,13 @@ const shopButton = document.getElementById("shopButton");
 const shopPanel = document.getElementById("shopPanel");
 const closeShop = document.getElementById("closeShop");
 const shopItemsEl = document.getElementById("shopItems");
-const howToPlayCard = document.getElementById("howToPlay");
+const menuToggle = document.getElementById("menuToggle");
 
 const levelDisplay = document.getElementById("levelDisplay");
 const pelletDisplay = document.getElementById("pelletDisplay");
 const crocDisplay = document.getElementById("crocDisplay");
+const everDisplay = document.getElementById("everDisplay");
+const activeDisplay = document.getElementById("activeDisplay");
 
 const keys = new Set();
 let boardWidth = 960;
@@ -30,10 +32,13 @@ let lastTime = 0;
 let camera = { x: 0, y: 0 };
 let zoom = 1;
 let pelletBank = 0;
+let everPlayers = 0;
+let sessionCounted = false;
+let menuOpen = false;
 
 const BASE_RADIUS = 12;
 const RADIUS_PER_LEVEL = 0.6; // wider very slowly
-const MAX_RADIUS = 80; // visual cap so croc never fills screen
+const MAX_RADIUS = 80; // desktop visual cap
 const BASE_LENGTH = 40;
 const LENGTH_PER_LEVEL = 10;
 const MAX_EXTRA_LENGTH = 220;
@@ -47,18 +52,21 @@ const TARGET_ROCKS = 8;
 const TARGET_CHESTS = 2;
 const WORLD_WIDTH = 4800;
 const WORLD_HEIGHT = 3200;
-const MIN_ZOOM = 0.55;
+const MIN_ZOOM = 0.45;
 const MAX_ZOOM = 1.4;
 const ROCK_VALUE = 3;
+const EVER_KEY = "crocyEverPlayers";
 
 class Croc {
-  constructor(x, y, level, color, isPlayer = false, name = "Croc") {
+  constructor(x, y, level, color, isPlayer = false, name = "Croc", pattern = "Plain", accessory = null) {
     this.x = x;
     this.y = y;
     this.level = level;
     this.color = color;
     this.isPlayer = isPlayer;
     this.name = name;
+    this.pattern = pattern;
+    this.accessory = accessory;
     this.vx = 1;
     this.vy = 0;
     this.dead = false;
@@ -140,7 +148,9 @@ class Croc {
 }
 
 function calcRadius(level) {
-  return Math.min(MAX_RADIUS, BASE_RADIUS + level * RADIUS_PER_LEVEL);
+  const radius = BASE_RADIUS + level * RADIUS_PER_LEVEL;
+  const mobileCap = isMobile() ? BASE_RADIUS + 14 * RADIUS_PER_LEVEL : MAX_RADIUS;
+  return Math.min(radius, mobileCap);
 }
 
 function calcLength(level) {
@@ -170,15 +180,16 @@ function resizeCanvas() {
   } else {
     updateCamera();
   }
+  updateMobileUi();
 }
 
 function buildNpcs() {
   npcs = [];
   let attempts = 0;
-  while (npcs.length < TARGET_NPCS && attempts < 500) {
+  while (npcs.length < getNpcTarget() && attempts < 500) {
     attempts += 1;
     const level = Math.floor(randomRange(1, 7));
-    const candidate = new Croc(0, 0, level, randomColor(), false, randomName());
+    const candidate = new Croc(0, 0, level, randomColor(), false, randomName(), randomPattern());
     const point = randomPoint(candidate.radius * 2);
     candidate.x = point.x;
     candidate.y = point.y;
@@ -215,10 +226,28 @@ function buildChests() {
 function startGame() {
   resizeCanvas();
   const chosenName = (playerNameInput?.value || "").trim().slice(0, 14);
-  player = new Croc(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 3, ownedItem?.color || "#5af18c", true, chosenName || "You");
+  player = new Croc(
+    WORLD_WIDTH / 2,
+    WORLD_HEIGHT / 2,
+    3,
+    ownedItem?.color || "#5af18c",
+    true,
+    chosenName || "You",
+    ownedItem?.pattern || "Plain",
+    ownedAccessory
+  );
   const speed = player.maxSpeed();
   player.vx = speed;
   player.vy = 0;
+  if (!sessionCounted) {
+    everPlayers += 1;
+    sessionCounted = true;
+    try {
+      localStorage.setItem(EVER_KEY, everPlayers.toString());
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
   buildNpcs();
   buildPellets();
   buildRocks();
@@ -226,12 +255,12 @@ function startGame() {
   pelletBank = 0;
   running = true;
   overlay.classList.add("hidden");
-  howToPlayCard?.classList.add("hidden");
   statusBadge.textContent = "Live";
   statusBadge.className = "badge badge-live";
   lastTime = 0;
   requestAnimationFrame(gameLoop);
   updateStats();
+  updateMobileUi();
 }
 
 function handleInputs() {
@@ -376,9 +405,9 @@ function separate(a, b, dist) {
 }
 
 function spawnMissing() {
-  while (npcs.length < TARGET_NPCS) {
+  while (npcs.length < getNpcTarget()) {
     const level = Math.floor(randomRange(1, Math.max(3, player.level)));
-    const croc = new Croc(0, 0, level, randomColor());
+    const croc = new Croc(0, 0, level, randomColor(), false, randomName(), randomPattern());
     const point = randomPoint(croc.radius * 2);
     croc.x = point.x;
     croc.y = point.y;
@@ -520,7 +549,7 @@ function randomColor() {
 }
 
 function randomPattern() {
-  const patterns = ["Plain", "Spots", "Stripes", "Camouflage", "Lava", "Aurora"];
+  const patterns = ["Plain", "Spots", "Stripes", "Camouflage", "Lava", "Aurora", "Polka", "Harlequin"];
   return patterns[Math.floor(Math.random() * patterns.length)];
 }
 
@@ -551,15 +580,19 @@ function randomName() {
 
 const SHOP_ITEMS = [
   { id: "jade", name: "Jade Scale", cost: 8, color: "#5af18c", pattern: "Plain", preview: "#5af18c" },
-  { id: "sunset", name: "Sunset Fade", cost: 10, color: "#ff9f68", pattern: "Spots", preview: "linear-gradient(135deg,#ff9f68,#ff6b6b)" },
-  { id: "midnight", name: "Midnight Stripe", cost: 12, color: "#4c6fff", pattern: "Stripes", preview: "linear-gradient(135deg,#141833,#4c6fff)" },
-  { id: "ember", name: "Ember Glow", cost: 14, color: "#ff6b6b", pattern: "Lava", preview: "linear-gradient(135deg,#241313,#ff6b6b)" },
+  { id: "sunset", name: "Sunset Fade", cost: 10, color: "#ff9f68", pattern: "Spots", preview: "radial-gradient(circle,#ff9f68 35%,#ff6b6b 70%)" },
+  { id: "midnight", name: "Midnight Stripe", cost: 12, color: "#4c6fff", pattern: "Stripes", preview: "repeating-linear-gradient(45deg,#141833 0 12px,#4c6fff 12px 24px)" },
+  { id: "ember", name: "Ember Glow", cost: 14, color: "#ff6b6b", pattern: "Lava", preview: "radial-gradient(circle at 30% 30%,#ff9f68,#ff6b6b,#241313)" },
   { id: "aurora", name: "Aurora Swirl", cost: 16, color: "#7ce0ff", pattern: "Aurora", preview: "radial-gradient(circle,#7ce0ff,#8f7dff)" },
   { id: "rainbow", name: "Rainbow Ripple", cost: 18, color: "#f6c", pattern: "Rainbow", preview: "linear-gradient(90deg,#ff6b6b,#ffdf6b,#7cf27d,#7ce0ff,#b57cff)" },
   { id: "void", name: "Nebula Black", cost: 20, color: "#1b1c2e", pattern: "Nebula", preview: "radial-gradient(circle at 30% 30%,#6a5dff,#1b1c2e,#0a0c1f)" },
+  { id: "polka", name: "Polka Dot Party", cost: 16, color: "#7ce0ff", pattern: "Polka", preview: "radial-gradient(circle,#fff 15%,#7ce0ff 16%)" },
+  { id: "crown", name: "Royal Crown", cost: 18, color: "#5af18c", pattern: "Plain", preview: "#f6c343", accessory: "crown" },
+  { id: "jester", name: "Jester Cap", cost: 18, color: "#ff6b6b", pattern: "Harlequin", preview: "repeating-linear-gradient(45deg,#ff6b6b 0 10px,#7ce0ff 10px 20px)", accessory: "jester" },
 ];
 
 let ownedItem = SHOP_ITEMS[0];
+let ownedAccessory = null;
 
 function renderShop() {
   if (!shopItemsEl) return;
@@ -575,7 +608,7 @@ function renderShop() {
       <span class="muted">${item.pattern}</span>
       <div class="shop-preview" style="background:${item.preview || item.color};"></div>
       <div class="shop-chip"><span>●</span>${item.cost} pellets</div>
-      <button class="secondary" data-id="${item.id}" ${ownedItem.id === item.id ? "disabled" : ""}>${ownedItem.id === item.id ? "Equipped" : "Buy"}</button>
+      <button class="secondary" data-id="${item.id}" ${ownedItem.id === item.id && ownedAccessory === item.accessory ? "disabled" : ""}>${ownedItem.id === item.id && ownedAccessory === item.accessory ? "Equipped" : "Buy"}</button>
     `;
     shopItemsEl.appendChild(div);
   });
@@ -591,8 +624,11 @@ function renderShop() {
       }
       pelletBank -= item.cost;
       ownedItem = item;
+      ownedAccessory = item.accessory || null;
       if (player) {
         player.color = item.color;
+        player.pattern = item.pattern;
+        player.accessory = item.accessory || null;
       }
       flashStatus("Equipped!", "live");
       renderShop();
@@ -611,6 +647,8 @@ function triggerGameOver(enemyLevel) {
   overlayMessage.textContent = `A level ${enemyLevel} croc swallowed you.`;
   statusBadge.textContent = "Defeated";
   statusBadge.className = "badge";
+  updateStats();
+  updateMobileUi();
 }
 
 function worldToScreen(x, y) {
@@ -634,8 +672,11 @@ function updateCamera() {
     camera.y = clamp(player.y, halfH, WORLD_HEIGHT - halfH);
   }
 
-  const zoomFactor = clamp(1.1 - player.radius / 140, MIN_ZOOM, MAX_ZOOM);
-  zoom = zoomFactor;
+  let zoomFactor = 1.1 - player.radius / 140;
+  if (isMobile()) {
+    zoomFactor *= 0.82; // zoom out further on mobile so crocs feel smaller
+  }
+  zoom = clamp(zoomFactor, MIN_ZOOM, MAX_ZOOM);
 }
 
 function clamp(value, min, max) {
@@ -665,7 +706,39 @@ function drawCrocShape(context, cx, cy, radius, length, color, heading = 0) {
   // Body (rounded rectangle)
   context.beginPath();
   roundedRect(context, -len * 0.55, -bodyWidth / 2, len * 0.7, bodyWidth, bodyWidth * 0.45);
-  context.fillStyle = color;
+  // Body fill with optional patterns
+  if (ownedItem.pattern === "Polka" || ownedItem.pattern === "Harlequin") {
+    const patternCanvas = document.createElement("canvas");
+    const size = ownedItem.pattern === "Polka" ? 60 : 80;
+    patternCanvas.width = size;
+    patternCanvas.height = size;
+    const pctx = patternCanvas.getContext("2d");
+    pctx.fillStyle = color;
+    pctx.fillRect(0, 0, size, size);
+    if (ownedItem.pattern === "Polka") {
+      pctx.fillStyle = "#ffffff";
+      for (let x = 10; x < size; x += 20) {
+        for (let y = 10; y < size; y += 20) {
+          pctx.beginPath();
+          pctx.arc(x, y, 4, 0, Math.PI * 2);
+          pctx.fill();
+        }
+      }
+    } else if (ownedItem.pattern === "Harlequin") {
+      pctx.fillStyle = shadeColor(color, 30);
+      pctx.beginPath();
+      pctx.moveTo(size / 2, 0);
+      pctx.lineTo(size, size / 2);
+      pctx.lineTo(size / 2, size);
+      pctx.lineTo(0, size / 2);
+      pctx.closePath();
+      pctx.fill();
+    }
+    const pat = context.createPattern(patternCanvas, "repeat");
+    context.fillStyle = pat;
+  } else {
+    context.fillStyle = color;
+  }
   context.fill();
 
   // Belly stripe
@@ -732,6 +805,46 @@ function drawCrocShape(context, cx, cy, radius, length, color, heading = 0) {
   // Nostril
   context.fillStyle = "#0f1326";
   drawEllipse(context, len * 0.55, -headWidth * 0.05, radius * 0.12, radius * 0.08);
+
+  // Accessory (crown or jester)
+  if (ownedItem.accessory === "crown") {
+    context.fillStyle = "#f6c343";
+    context.strokeStyle = "#d49b2d";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(len * 0.05, -bodyWidth * 0.9);
+    context.lineTo(len * 0.15, -headWidth * 1.2);
+    context.lineTo(len * 0.25, -bodyWidth * 0.9);
+    context.lineTo(len * 0.35, -headWidth * 1.2);
+    context.lineTo(len * 0.45, -bodyWidth * 0.9);
+    context.lineTo(len * 0.45, -bodyWidth * 0.65);
+    context.lineTo(len * 0.05, -bodyWidth * 0.65);
+    context.closePath();
+    context.fill();
+    context.stroke();
+  } else if (ownedItem.accessory === "jester") {
+    context.fillStyle = "#ff6b6b";
+    context.strokeStyle = "#0f1326";
+    context.lineWidth = 1.2;
+    context.beginPath();
+    context.moveTo(len * 0.05, -bodyWidth * 0.85);
+    context.quadraticCurveTo(len * 0.15, -headWidth * 1.3, len * 0.25, -bodyWidth * 0.85);
+    context.quadraticCurveTo(len * 0.35, -headWidth * 1.3, len * 0.45, -bodyWidth * 0.85);
+    context.lineTo(len * 0.45, -bodyWidth * 0.65);
+    context.lineTo(len * 0.05, -bodyWidth * 0.65);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // Bells
+    context.fillStyle = "#ffd166";
+    context.beginPath();
+    context.arc(len * 0.25, -headWidth * 1.3, 4, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.arc(len * 0.35, -headWidth * 1.3, 4, 0, Math.PI * 2);
+    context.fill();
+  }
 
   // Back scutes
   context.fillStyle = scuteColor;
@@ -815,6 +928,29 @@ function updateStats() {
   levelDisplay.textContent = player ? player.level : "-";
   pelletDisplay.textContent = pelletBank.toString();
   crocDisplay.textContent = npcs.length.toString();
+  everDisplay.textContent = everPlayers.toString();
+  activeDisplay.textContent = running ? "1" : "0";
+}
+
+function isMobile() {
+  return window.matchMedia("(max-width: 840px)").matches;
+}
+
+function getNpcTarget() {
+  return isMobile() ? 16 : TARGET_NPCS;
+}
+
+function updateMobileUi() {
+  if (isMobile() && running && !menuOpen) {
+    document.body.classList.add("mobile-running");
+    document.body.classList.remove("mobile-menu-open");
+  } else if (isMobile() && menuOpen) {
+    document.body.classList.add("mobile-menu-open");
+    document.body.classList.remove("mobile-running");
+  } else {
+    document.body.classList.remove("mobile-running");
+    document.body.classList.remove("mobile-menu-open");
+  }
 }
 
 function flashStatus(message, tone) {
@@ -857,7 +993,20 @@ shopButton?.addEventListener("click", () => {
 closeShop?.addEventListener("click", () => {
   shopPanel.classList.add("hidden");
 });
+menuToggle?.addEventListener("click", () => {
+  menuOpen = !menuOpen;
+  updateMobileUi();
+});
 
 // Kick off idle render so the board is visible before starting.
 resizeCanvas();
+try {
+  const savedEver = parseInt(localStorage.getItem(EVER_KEY) || "0", 10);
+  if (!Number.isNaN(savedEver)) {
+    everPlayers = savedEver;
+  }
+} catch (err) {
+  everPlayers = 0;
+}
 draw();
+updateStats();

@@ -13,6 +13,7 @@
   <div class="fullscreen">
     <canvas id="gameCanvas"></canvas>
     <div class="hud">
+      <button id="menuToggle" class="menu-toggle" aria-label="Menu">☰</button>
       <div class="hud-top">
         <div class="title-block">
           <h1>Crocy Clash</h1>
@@ -23,7 +24,6 @@
           <div class="actions">
             <input id="playerNameInput" class="name-input" type="text" placeholder="Your croc name" maxlength="14" />
             <button id="startButton" class="primary">Start / Restart</button>
-            <span class="hint">WASD / Arrows to move</span>
           </div>
         </div>
         <div class="stat-block">
@@ -39,21 +39,18 @@
             <span class="label">Crocs</span>
             <span id="crocDisplay" class="value">-</span>
           </div>
+          <div class="stat">
+            <span class="label">Ever played</span>
+            <span id="everDisplay" class="value">-</span>
+          </div>
+          <div class="stat">
+            <span class="label">Playing now</span>
+            <span id="activeDisplay" class="value">-</span>
+          </div>
           <div class="stat badge-housing">
             <div id="statusBadge" class="badge badge-live">Live</div>
           </div>
           <button id="shopButton" class="secondary">Shop</button>
-        </div>
-      </div>
-      <div class="hud-bottom">
-        <div class="card inline" id="howToPlay">
-          <h4>How to play</h4>
-          <ul class="guide">
-            <li>Move with WASD or arrow keys.</li>
-            <li>Eat lower-level crocs to absorb their level.</li>
-            <li>Pellets add +1 level; they respawn around the lagoon.</li>
-            <li>Bigger crocs end your run on contact.</li>
-          </ul>
         </div>
       </div>
     </div>

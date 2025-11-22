@@ -52,6 +52,24 @@ canvas {
   padding: 18px;
 }
 
+.menu-toggle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+  color: #e8f2ff;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  display: none;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .hud-top {
   display: flex;
   gap: 18px;
@@ -121,7 +139,7 @@ canvas {
 
 .stat-block {
   display: grid;
-  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
   pointer-events: auto;
 }
@@ -277,6 +295,14 @@ canvas {
   display: none;
 }
 
+.mobile-menu-open .hud {
+  display: flex;
+}
+
+.mobile-running .hud {
+  display: none;
+}
+
 .shop-card {
   width: min(520px, 90vw);
   background: #0b1326;
@@ -341,5 +367,15 @@ canvas {
 
   .title-block {
     max-width: none;
+  }
+
+  .menu-toggle {
+    display: block;
+  }
+
+  .overlay .card,
+  .shop-card {
+    width: 90vw;
+    padding: 16px;
   }
 }
