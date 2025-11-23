@@ -54,10 +54,10 @@ const PLAYER_SPEED = 255; // 1.5x baseline
 const NPC_SPEED = 188; // 1.5x baseline
 const SPEED_FALLOFF = 0; // no slowdown on growth
 const PELLET_SIZE = 12;
-const TARGET_PELLETS = 34; // ~30% more
-const TARGET_NPCS = 13; // ~30% more
-const TARGET_ROCKS = 10; // ~30% more
-const TARGET_CHESTS = 3; // ~30% more
+const TARGET_PELLETS = 26;
+const TARGET_NPCS = 10;
+const TARGET_ROCKS = 8;
+const TARGET_CHESTS = 2;
 const WORLD_WIDTH = 4800;
 const WORLD_HEIGHT = 3200;
 const MIN_ZOOM = 0.45;
@@ -91,7 +91,8 @@ class Croc {
   }
 
   consume(amount) {
-    this.level += amount;
+    const maxLevel = this.isPlayer ? Infinity : (player ? player.level + 5 : START_LEVEL + 5);
+    this.level = Math.min(this.level + amount, maxLevel);
     this.radius = calcRadius(this.level);
     this.length = calcLength(this.level);
     // Extend trail capacity when we grow.
@@ -1080,7 +1081,7 @@ function isMobile() {
 }
 
 function getNpcTarget() {
-  return isMobile() ? Math.ceil(TARGET_NPCS * 1.4) : TARGET_NPCS;
+  return isMobile() ? Math.ceil(TARGET_NPCS * 1.1) : TARGET_NPCS;
 }
 
 function updateMobileUi() {
