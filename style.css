@@ -81,6 +81,8 @@ canvas {
   box-shadow: var(--shadow);
   z-index: 2;
   pointer-events: auto;
+  width: calc(100vw - 20px);
+  justify-content: space-between;
 }
 
 .menu-toggle {
@@ -113,6 +115,12 @@ canvas {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.mini-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .mini-label {
@@ -343,7 +351,9 @@ canvas {
   inset: 0;
   background: rgba(5, 9, 17, 0.7);
   display: grid;
-  place-items: center;
+  place-items: start center;
+  padding: 18px;
+  overflow-y: auto;
 }
 
 .shop.hidden {
@@ -373,6 +383,9 @@ canvas {
   border-radius: 16px;
   padding: 18px;
   box-shadow: var(--shadow);
+  margin-top: 24px;
+  max-height: 92vh;
+  overflow: auto;
 }
 
 .shop-header {
@@ -438,11 +451,18 @@ canvas {
 
   .mobile-bar {
     display: inline-flex;
+    justify-content: space-between;
   }
 
   .overlay .card,
   .shop-card {
     width: 90vw;
     padding: 16px;
+    max-height: 88vh;
   }
+}
+
+.mobile-bar .menu-toggle,
+.mobile-bar .shop-toggle {
+  position: static;
 }

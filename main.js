@@ -46,14 +46,18 @@ const MAX_RADIUS = 80; // desktop visual cap
 const BASE_LENGTH = 40;
 const LENGTH_PER_LEVEL = 10;
 const MAX_EXTRA_LENGTH = 220;
+const MAX_LENGTH_LEVEL = 30;
+const START_LEVEL = 3;
+const HEAD_RADIUS = BASE_RADIUS + START_LEVEL * RADIUS_PER_LEVEL; // lock head/body size to level 3
+const HEAD_LENGTH = BASE_LENGTH + START_LEVEL * LENGTH_PER_LEVEL; // visual head/body length stays constant
 const PLAYER_SPEED = 255; // 1.5x baseline
 const NPC_SPEED = 188; // 1.5x baseline
 const SPEED_FALLOFF = 0; // no slowdown on growth
 const PELLET_SIZE = 12;
-const TARGET_PELLETS = 26;
-const TARGET_NPCS = 10;
-const TARGET_ROCKS = 8;
-const TARGET_CHESTS = 2;
+const TARGET_PELLETS = 34; // ~30% more
+const TARGET_NPCS = 13; // ~30% more
+const TARGET_ROCKS = 10; // ~30% more
+const TARGET_CHESTS = 3; // ~30% more
 const WORLD_WIDTH = 4800;
 const WORLD_HEIGHT = 3200;
 const MIN_ZOOM = 0.45;
@@ -77,6 +81,8 @@ class Croc {
     this.wanderTimer = randomRange(1.2, 3.6);
     this.radius = calcRadius(level);
     this.length = calcLength(level);
+    this.trail = [];
+    this.initTrail();
   }
 
   maxSpeed() {
@@ -88,6 +94,8 @@ class Croc {
     this.level += amount;
     this.radius = calcRadius(this.level);
     this.length = calcLength(this.level);
+    // Extend trail capacity when we grow.
+    this.trail.push({ x: this.x, y: this.y });
     if (this.isPlayer) {
       flashStatus("Bulked up!", "live");
     }
@@ -104,6 +112,7 @@ class Croc {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     this.handleWalls();
+    this.updateTrail();
   }
 
   pickDirection() {
@@ -138,7 +147,9 @@ class Croc {
     ctx.fillStyle = this.color;
     ctx.beginPath();
     const heading = Math.atan2(this.vy || 0.0001, this.vx || 1);
-    drawCrocShape(ctx, this.screenX, this.screenY, this.radius, this.length, this.color, heading);
+    const segments = getSegmentsForCroc(this);
+    drawCrocBody(ctx, segments, this.radius, this.color);
+    drawCrocShape(ctx, this.screenX, this.screenY, this.radius, HEAD_LENGTH, this.color, heading);
 
     // Level badge on body
     ctx.fillStyle = "#0f1326";
@@ -149,16 +160,36 @@ class Croc {
 
     drawNameTag(ctx, this.name, this.screenX, this.screenY - this.radius - 16);
   }
+
+  updateTrail() {
+    this.trail.push({ x: this.x, y: this.y });
+    const spacing = this.radius * 1.25;
+    const targetSegments = Math.max(8, Math.floor(this.length / spacing) + 6);
+    const maxTrailPoints = targetSegments * 8;
+    if (this.trail.length > maxTrailPoints) {
+      this.trail = this.trail.slice(this.trail.length - maxTrailPoints);
+    }
+  }
+
+  initTrail() {
+    const seed = Math.max(12, Math.floor(this.length / (this.radius * 1.25)) + 8);
+    this.trail = [];
+    for (let i = 0; i < seed; i++) {
+      this.trail.push({ x: this.x, y: this.y });
+    }
+  }
 }
 
 function calcRadius(level) {
-  const radius = BASE_RADIUS + level * RADIUS_PER_LEVEL;
+  // Keep head size consistent; only tail grows.
+  const radius = HEAD_RADIUS;
   const mobileCap = isMobile() ? BASE_RADIUS + 14 * RADIUS_PER_LEVEL : MAX_RADIUS;
   return Math.min(radius, mobileCap);
 }
 
 function calcLength(level) {
-  const extra = Math.min(MAX_EXTRA_LENGTH, level * LENGTH_PER_LEVEL);
+  const effective = Math.min(level, MAX_LENGTH_LEVEL);
+  const extra = Math.min(MAX_EXTRA_LENGTH, effective * LENGTH_PER_LEVEL);
   return BASE_LENGTH + extra;
 }
 
@@ -192,15 +223,13 @@ function buildNpcs() {
   let attempts = 0;
   while (npcs.length < getNpcTarget() && attempts < 500) {
     attempts += 1;
-    const level = Math.floor(randomRange(1, 7));
-    const candidate = new Croc(0, 0, level, randomColor(), false, randomName(), randomPattern());
+    const candidate = new Croc(0, 0, START_LEVEL, randomColor(), false, randomName(), randomPattern());
     const point = randomPoint(candidate.radius * 2);
     candidate.x = point.x;
     candidate.y = point.y;
     candidate.pickDirection();
 
-    const ok = !npcs.some((c) => distance(c, candidate) < c.radius + candidate.radius + 10);
-    if (ok) {
+    if (isSpawnSafe(candidate)) {
       npcs.push(candidate);
     }
   }
@@ -233,7 +262,7 @@ function startGame() {
   player = new Croc(
     WORLD_WIDTH / 2,
     WORLD_HEIGHT / 2,
-    3,
+    START_LEVEL,
     ownedItem?.color || "#5af18c",
     true,
     chosenName || "You",
@@ -306,14 +335,17 @@ function handlePellets() {
     const actors = [player, ...npcs];
     for (const actor of actors) {
       if (actor.dead) continue;
-      const d = Math.hypot(actor.x - pellet.x, actor.y - pellet.y);
-      if (d < actor.radius + PELLET_SIZE) {
-        actor.consume(1);
-        if (actor.isPlayer) {
-          pelletBank += 1;
+      const points = getCollisionPoints(actor);
+      for (const p of points) {
+        const d = Math.hypot(p.x - pellet.x, p.y - pellet.y);
+        if (d < p.r + PELLET_SIZE) {
+          actor.consume(1);
+          if (actor.isPlayer) {
+            pelletBank += 1;
+          }
+          updateStats();
+          return false;
         }
-        updateStats();
-        return false;
       }
     }
     return true;
@@ -325,14 +357,17 @@ function handleRocks() {
     const actors = [player, ...npcs];
     for (const actor of actors) {
       if (actor.dead) continue;
-      const d = Math.hypot(actor.x - rock.x, actor.y - rock.y);
-      if (d < actor.radius + PELLET_SIZE + 4) {
-        actor.consume(ROCK_VALUE);
-        if (actor.isPlayer) {
-          pelletBank += ROCK_VALUE;
+      const points = getCollisionPoints(actor);
+      for (const p of points) {
+        const d = Math.hypot(p.x - rock.x, p.y - rock.y);
+        if (d < p.r + PELLET_SIZE + 4) {
+          actor.consume(ROCK_VALUE);
+          if (actor.isPlayer) {
+            pelletBank += ROCK_VALUE;
+          }
+          updateStats();
+          return false;
         }
-        updateStats();
-        return false;
       }
     }
     return true;
@@ -344,16 +379,19 @@ function handleChests() {
     const actors = [player, ...npcs];
     for (const actor of actors) {
       if (actor.dead) continue;
-      const d = Math.hypot(actor.x - chest.x, actor.y - chest.y);
-      if (d < actor.radius + PELLET_SIZE * 1.5) {
-        const rocksInside = Math.floor(randomRange(2, 6));
-        const value = rocksInside * ROCK_VALUE;
-        actor.consume(value);
-        if (actor.isPlayer) {
-          pelletBank += value;
+      const points = getCollisionPoints(actor);
+      for (const p of points) {
+        const d = Math.hypot(p.x - chest.x, p.y - chest.y);
+        if (d < p.r + PELLET_SIZE * 1.5) {
+          const rocksInside = Math.floor(randomRange(2, 6));
+          const value = rocksInside * ROCK_VALUE;
+          actor.consume(value);
+          if (actor.isPlayer) {
+            pelletBank += value;
+          }
+          updateStats();
+          return false;
         }
-        updateStats();
-        return false;
       }
     }
     return true;
@@ -368,26 +406,23 @@ function handleCollisions() {
       const b = actors[j];
       if (a.dead || b.dead) continue;
 
-      const dist = distance(a, b);
-      if (dist < a.radius + b.radius) {
-        let winner;
-        let loser;
-        if (a.level === b.level) {
-          // Equal level: both are eliminated to keep touch lethal.
-          a.dead = true;
-          b.dead = true;
-        } else {
-          winner = a.level > b.level ? a : b;
-          loser = winner === a ? b : a;
-        }
-        if (winner && loser) {
-          winner.consume(loser.level);
-          loser.dead = true;
-          separate(winner, loser, dist);
-          if (loser === player) {
-            triggerGameOver(winner.level);
-            return;
-          }
+      if (!crocsTouch(a, b)) continue;
+      let winner;
+      let loser;
+      if (a.level === b.level) {
+        // Equal level: both are eliminated to keep touch lethal.
+        a.dead = true;
+        b.dead = true;
+      } else {
+        winner = a.level > b.level ? a : b;
+        loser = winner === a ? b : a;
+      }
+      if (winner && loser) {
+        winner.consume(loser.level);
+        loser.dead = true;
+        if (loser === player) {
+          triggerGameOver(winner.level);
+          return;
         }
       }
     }
@@ -409,14 +444,18 @@ function separate(a, b, dist) {
 }
 
 function spawnMissing() {
-  while (npcs.length < getNpcTarget()) {
-    const level = Math.floor(randomRange(1, Math.max(3, player.level)));
-    const croc = new Croc(0, 0, level, randomColor(), false, randomName(), randomPattern());
+  let attempts = 0;
+  while (npcs.length < getNpcTarget() && attempts < 200) {
+    attempts += 1;
+    const croc = new Croc(0, 0, START_LEVEL, randomColor(), false, randomName(), randomPattern());
     const point = randomPoint(croc.radius * 2);
     croc.x = point.x;
     croc.y = point.y;
     croc.pickDirection();
-    npcs.push(croc);
+    if (isSpawnSafe(croc)) {
+      npcs.push(croc);
+    }
+    if (npcs.length >= getNpcTarget()) break;
   }
 
   while (pellets.length < TARGET_PELLETS) {
@@ -493,6 +532,20 @@ function drawPellets() {
     ctx.lineWidth = 2;
     ctx.stroke();
   });
+}
+
+function drawCrocBody(context, segments, radius, color) {
+  const bodyRadius = Math.max(6, radius * 0.75);
+  context.fillStyle = shadeColor(color, -6);
+  context.strokeStyle = "rgba(0,0,0,0.2)";
+  context.lineWidth = 1;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const p = segments[i];
+    context.beginPath();
+    context.arc(p.x, p.y, bodyRadius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
 }
 
 function drawRocks() {
@@ -903,6 +956,89 @@ function drawNameTag(context, text, x, y) {
   context.fillText(text, x, y + 1);
 }
 
+function getSegmentsForCroc(croc) {
+  // Returns points from tail to head.
+  const spacing = croc.radius * 1.25;
+  const desired = Math.max(8, Math.floor(croc.length / spacing) + 6);
+  const points = [];
+  let accumulated = 0;
+  const trail = (croc.trail && croc.trail.length ? croc.trail : [{ x: croc.x, y: croc.y }]).slice();
+  for (let i = trail.length - 1; i > 0 && points.length < desired; i--) {
+    const p = trail[i];
+    const prev = trail[i - 1];
+    const dx = p.x - prev.x;
+    const dy = p.y - prev.y;
+    const dist = Math.hypot(dx, dy);
+    accumulated += dist;
+    while (accumulated >= spacing && points.length < desired) {
+      const t = 1 - (accumulated - spacing) / dist;
+      const sx = prev.x + dx * t;
+      const sy = prev.y + dy * t;
+      points.push({ x: sx, y: sy });
+      accumulated -= spacing;
+    }
+  }
+  points.push({ x: croc.x, y: croc.y });
+  while (points.length < desired) {
+    points.unshift(points[0]);
+  }
+  return points.reverse();
+}
+
+function getCollisionPoints(croc) {
+  const segments = getSegmentsForCroc(croc);
+  const points = [];
+  const bodyR = Math.max(6, croc.radius * 0.75);
+  for (let i = 0; i < segments.length - 1; i++) {
+    points.push({ x: segments[i].x, y: segments[i].y, r: bodyR });
+  }
+  const head = segments[segments.length - 1];
+  points.push({ x: head.x, y: head.y, r: croc.radius });
+  return points;
+}
+
+function crocsTouch(a, b) {
+  const pointsA = getCollisionPoints(a);
+  const pointsB = getCollisionPoints(b);
+  for (const pa of pointsA) {
+    for (const pb of pointsB) {
+      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < pa.r + pb.r) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isSpawnSafe(candidate) {
+  const margin = candidate.radius * 4;
+  const viewMarginX = boardWidth / zoom * 0.6;
+  const viewMarginY = boardHeight / zoom * 0.6;
+  // avoid spawning right in the camera view to reduce instant collisions
+  if (
+    camera &&
+    candidate.x > camera.x - viewMarginX &&
+    candidate.x < camera.x + viewMarginX &&
+    candidate.y > camera.y - viewMarginY &&
+    candidate.y < camera.y + viewMarginY
+  ) {
+    return false;
+  }
+  const points = getCollisionPoints(candidate);
+  const actors = [player, ...npcs].filter(Boolean);
+  for (const actor of actors) {
+    const otherPoints = getCollisionPoints(actor);
+    for (const p of points) {
+      for (const op of otherPoints) {
+        if (Math.hypot(p.x - op.x, p.y - op.y) < p.r + op.r + margin) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 function shadeColor(color, percent) {
   const num = parseInt(color.replace("#", ""), 16);
   const r = (num >> 16) + percent;
@@ -944,7 +1080,7 @@ function isMobile() {
 }
 
 function getNpcTarget() {
-  return isMobile() ? 16 : TARGET_NPCS;
+  return isMobile() ? Math.ceil(TARGET_NPCS * 1.4) : TARGET_NPCS;
 }
 
 function updateMobileUi() {
@@ -1002,6 +1138,10 @@ shopButton?.addEventListener("click", () => {
 });
 closeShop?.addEventListener("click", () => {
   shopPanel.classList.add("hidden");
+  if (isMobile()) {
+    menuOpen = false;
+    updateMobileUi();
+  }
 });
 menuToggle?.addEventListener("click", () => {
   menuOpen = !menuOpen;
