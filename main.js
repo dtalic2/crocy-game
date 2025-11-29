@@ -678,7 +678,8 @@ function renderShop() {
   });
 
   shopItemsEl.querySelectorAll("button[data-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    const handler = (e) => {
+      e.preventDefault();
       const id = btn.getAttribute("data-id");
       const item = SHOP_ITEMS.find((i) => i.id === id);
       if (!item) return;
@@ -699,7 +700,9 @@ function renderShop() {
       flashStatus("Equipped!", "live");
       renderShop();
       updateStats();
-    });
+    };
+    btn.addEventListener("click", handler);
+    btn.addEventListener("touchend", handler, { passive: false });
   });
 }
 
