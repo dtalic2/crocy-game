@@ -75,6 +75,8 @@ class Croc {
     this.name = name;
     this.pattern = pattern;
     this.accessory = accessory;
+    this.effect = null;
+    this.hueOffset = Math.random() * 360;
     this.vx = 1;
     this.vy = 0;
     this.dead = false;
@@ -145,12 +147,11 @@ class Croc {
   }
 
   draw() {
-    ctx.fillStyle = this.color;
-    ctx.beginPath();
     const heading = Math.atan2(this.vy || 0.0001, this.vx || 1);
+    const color = getCrocColor(this);
     const segments = getSegmentsForCroc(this);
-    drawCrocBody(ctx, segments, this.radius, this.color);
-    drawCrocShape(ctx, this.screenX, this.screenY, this.radius, HEAD_LENGTH, this.color, heading);
+    drawCrocBody(ctx, segments, this.radius, color);
+    drawCrocShape(ctx, this.screenX, this.screenY, this.radius, HEAD_LENGTH, color, heading);
 
     // Level badge on body
     ctx.fillStyle = "#0f1326";
@@ -270,6 +271,7 @@ function startGame() {
     ownedItem?.pattern || "Plain",
     ownedAccessory
   );
+  player.effect = ownedEffect;
   const speed = player.maxSpeed();
   player.vx = speed;
   player.vy = 0;
@@ -326,6 +328,7 @@ function update(dt) {
   handlePellets();
   handleRocks();
   handleChests();
+  applyMagnet();
   handleCollisions();
   spawnMissing();
   updateCamera();
@@ -643,6 +646,8 @@ const SHOP_ITEMS = [
   { id: "ember", name: "Ember Glow", cost: 14, color: "#ff6b6b", pattern: "Lava", preview: "radial-gradient(circle at 30% 30%,#ff9f68,#ff6b6b,#241313)" },
   { id: "aurora", name: "Aurora Swirl", cost: 16, color: "#7ce0ff", pattern: "Aurora", preview: "radial-gradient(circle,#7ce0ff,#8f7dff)" },
   { id: "rainbow", name: "Rainbow Ripple", cost: 18, color: "#f6c", pattern: "Rainbow", preview: "linear-gradient(90deg,#ff6b6b,#ffdf6b,#7cf27d,#7ce0ff,#b57cff)" },
+  { id: "disco", name: "Disco Flash", cost: 20, color: "#ffffff", pattern: "Disco", preview: "linear-gradient(90deg,#ff6b6b,#ffdf6b,#7cf27d,#7ce0ff,#b57cff)" , effect: "disco"},
+  { id: "magnet", name: "Magnet Skin", cost: 22, color: "#7ee4c8", pattern: "Plain", preview: "linear-gradient(135deg,#d7dbe0,#7ee4c8)", effect: "magnet" },
   { id: "void", name: "Nebula Black", cost: 20, color: "#1b1c2e", pattern: "Nebula", preview: "radial-gradient(circle at 30% 30%,#6a5dff,#1b1c2e,#0a0c1f)" },
   { id: "polka", name: "Polka Dot Party", cost: 16, color: "#7ce0ff", pattern: "Polka", preview: "radial-gradient(circle,#fff 15%,#7ce0ff 16%)" },
   { id: "crown", name: "Royal Crown", cost: 18, color: "#5af18c", pattern: "Plain", preview: "#f6c343", accessory: "crown" },
@@ -651,6 +656,7 @@ const SHOP_ITEMS = [
 
 let ownedItem = SHOP_ITEMS[0];
 let ownedAccessory = null;
+let ownedEffect = SHOP_ITEMS[0].effect || null;
 
 function renderShop() {
   if (!shopItemsEl) return;
@@ -666,7 +672,7 @@ function renderShop() {
       <span class="muted">${item.pattern}</span>
       <div class="shop-preview" style="background:${item.preview || item.color};"></div>
       <div class="shop-chip"><span>●</span>${item.cost} pellets</div>
-      <button class="secondary" data-id="${item.id}" ${ownedItem.id === item.id && ownedAccessory === item.accessory ? "disabled" : ""}>${ownedItem.id === item.id && ownedAccessory === item.accessory ? "Equipped" : "Buy"}</button>
+      <button class="secondary" data-id="${item.id}" ${ownedItem.id === item.id && ownedAccessory === item.accessory && ownedEffect === (item.effect || null) ? "disabled" : ""}>${ownedItem.id === item.id && ownedAccessory === item.accessory && ownedEffect === (item.effect || null) ? "Equipped" : "Buy"}</button>
     `;
     shopItemsEl.appendChild(div);
   });
@@ -683,16 +689,26 @@ function renderShop() {
       pelletBank -= item.cost;
       ownedItem = item;
       ownedAccessory = item.accessory || null;
+      ownedEffect = item.effect || null;
       if (player) {
         player.color = item.color;
         player.pattern = item.pattern;
         player.accessory = item.accessory || null;
+        player.effect = item.effect || null;
       }
       flashStatus("Equipped!", "live");
       renderShop();
       updateStats();
     });
   });
+}
+
+function getCrocColor(croc) {
+  if (croc.effect === "disco") {
+    const t = (performance.now ? performance.now() : Date.now()) * 0.06 + croc.hueOffset;
+    return `hsl(${t % 360}, 80%, 60%)`;
+  }
+  return croc.color;
 }
 
 function distance(a, b) {
@@ -1011,6 +1027,14 @@ function crocsTouch(a, b) {
   return false;
 }
 
+function setHeadingTowards(worldX, worldY) {
+  if (!player) return;
+  const angle = Math.atan2(worldY - player.y, worldX - player.x);
+  const speed = player.maxSpeed();
+  player.vx = Math.cos(angle) * speed;
+  player.vy = Math.sin(angle) * speed;
+}
+
 function isSpawnSafe(candidate) {
   const margin = candidate.radius * 4;
   const viewMarginX = boardWidth / zoom * 0.6;
@@ -1085,10 +1109,10 @@ function getNpcTarget() {
 }
 
 function updateMobileUi() {
-  if (isMobile() && running && !menuOpen) {
+  if (running && !menuOpen) {
     document.body.classList.add("mobile-running");
     document.body.classList.remove("mobile-menu-open");
-  } else if (isMobile() && menuOpen) {
+  } else if (menuOpen) {
     document.body.classList.add("mobile-menu-open");
     document.body.classList.remove("mobile-running");
   } else {
@@ -1104,6 +1128,28 @@ function flashStatus(message, tone) {
     statusBadge.textContent = running ? "Live" : "Paused";
     statusBadge.className = running ? "badge badge-live" : "badge";
   }, 1000);
+}
+
+function applyMagnet() {
+  if (!player || player.effect !== "magnet") return;
+  const radius = 260;
+  const pull = 180;
+  const applyPull = (arr, factor) => {
+    for (const obj of arr) {
+      const dx = player.x - obj.x;
+      const dy = player.y - obj.y;
+      const d = Math.hypot(dx, dy);
+      if (d > radius || d === 0) continue;
+      const step = Math.min(pull * (1 - d / radius), d);
+      const nx = dx / d;
+      const ny = dy / d;
+      obj.x += nx * step * factor;
+      obj.y += ny * step * factor;
+    }
+  };
+  applyPull(pellets, 0.05);
+  applyPull(rocks, 0.04);
+  applyPull(chests, 0.03);
 }
 
 // Event wiring
@@ -1122,33 +1168,42 @@ window.addEventListener("touchstart", (e) => {
   const ty = (touch.clientY - rect.top) / rect.height * boardHeight;
   const worldX = camera.x - (boardWidth / (2 * zoom)) + tx / zoom;
   const worldY = camera.y - (boardHeight / (2 * zoom)) + ty / zoom;
-  const angle = Math.atan2(worldY - player.y, worldX - player.x);
-  const speed = player.maxSpeed();
-  player.vx = Math.cos(angle) * speed;
-  player.vy = Math.sin(angle) * speed;
+  setHeadingTowards(worldX, worldY);
 });
 canvas.addEventListener("touchmove", (e) => {
   e.preventDefault();
 }, { passive: false });
 
+canvas.addEventListener("mousedown", (e) => {
+  if (!player) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / rect.width * boardWidth;
+  const my = (e.clientY - rect.top) / rect.height * boardHeight;
+  const worldX = camera.x - (boardWidth / (2 * zoom)) + mx / zoom;
+  const worldY = camera.y - (boardHeight / (2 * zoom)) + my / zoom;
+  setHeadingTowards(worldX, worldY);
+});
+
 startButton.addEventListener("click", startGame);
 overlayButton.addEventListener("click", startGame);
 shopButton?.addEventListener("click", () => {
+  menuOpen = true;
+  updateMobileUi();
   shopPanel.classList.remove("hidden");
   renderShop();
 });
 closeShop?.addEventListener("click", () => {
   shopPanel.classList.add("hidden");
-  if (isMobile()) {
-    menuOpen = false;
-    updateMobileUi();
-  }
+  menuOpen = false;
+  updateMobileUi();
 });
 menuToggle?.addEventListener("click", () => {
   menuOpen = !menuOpen;
   updateMobileUi();
 });
 mobileShopButton?.addEventListener("click", () => {
+  menuOpen = true;
+  updateMobileUi();
   shopPanel.classList.remove("hidden");
   renderShop();
   if (isMobile()) {

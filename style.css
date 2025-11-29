@@ -376,6 +376,11 @@ canvas {
   display: inline-flex;
 }
 
+.mobile-running .menu-toggle,
+.mobile-menu-open .menu-toggle {
+  display: inline-flex;
+}
+
 .shop-card {
   width: min(520px, 90vw);
   background: #0b1326;
